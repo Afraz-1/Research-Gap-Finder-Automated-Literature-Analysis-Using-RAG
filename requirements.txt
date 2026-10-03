@@ -1,0 +1,8 @@
+pymupdf>=1.24,<2
+nltk>=3.9,<4
+pytest>=8,<10
+scikit-learn>=1.5,<2
+gensim>=4.3,<5
+networkx>=3,<4
+streamlit>=1.39,<2
+pandas>=2.2,<3
