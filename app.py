@@ -11,7 +11,7 @@ import streamlit as st
 from rag_gap_finder.analyze import analyze, read_passages
 from rag_gap_finder.gaps import inspect_gaps
 from rag_gap_finder.preprocess import load_corpus
-from rag_gap_finder.retrieve import extractive_answer, ollama_answer, retrieve
+from rag_gap_finder.retrieve import extractive_answer, ollama_answer_stream, retrieve
 
 
 st.set_page_config(page_title="Research Gap Finder", layout="wide")
@@ -119,18 +119,25 @@ with ask_tab:
     st.subheader("Ask a question over the papers")
     question = st.text_input("Question", "What privacy concerns arise in AI education?")
     generator = st.radio("Answer method", ["Extractive TextRank", "Local Llama 3.2 transformer"], horizontal=True)
+    just_streamed = False
     if st.button("Retrieve evidence and answer", type="primary"):
         try:
-            evidence = retrieve(passages, question, top_k=5)
-            answer = (ollama_answer(question, evidence) if generator.startswith("Local")
-                      else extractive_answer(question, evidence))
+            with st.spinner("Retrieving and analyzing passages..."):
+                evidence = retrieve(passages, question, top_k=5)
+            if generator.startswith("Local"):
+                with st.spinner("Llama is reading evidence on the CPU. Words will appear as it writes..."):
+                    answer = st.write_stream(ollama_answer_stream(question, evidence))
+                just_streamed = True
+            else:
+                answer = extractive_answer(question, evidence)
             st.session_state["last_result"] = (answer, evidence)
         except Exception as exc:
             st.error(str(exc))
     if "last_result" in st.session_state:
         answer, evidence = st.session_state["last_result"]
         st.markdown("**Answer**")
-        st.write(answer)
+        if not just_streamed:
+            st.write(answer)
         st.markdown("**Ranked evidence — verify the citations**")
         for item in evidence:
             with st.expander(f"[{item['rank']}] {item['title']} • cosine {item['score']:.3f}"):
@@ -170,21 +177,28 @@ with gaps_tab:
             format_func=lambda item: f"{item['topic'].replace('_', ' ')}: {item['aspect']}",
         )
         use_local_model = st.checkbox("Use local Llama 3.2 to synthesize the evidence", value=False)
+        just_streamed_gap = False
         if st.button("Investigate selected gap"):
             gap_question = (
                 f"What do these abstracts say about {selected_gap['aspect']} in "
                 f"{selected_gap['topic'].replace('_', ' ')}? What remains uncertain?"
             )
             try:
-                gap_evidence = retrieve(passages, gap_question, top_k=5)
-                gap_answer = (ollama_answer(gap_question, gap_evidence) if use_local_model
-                              else extractive_answer(gap_question, gap_evidence))
+                with st.spinner("Retrieving and analyzing passages..."):
+                    gap_evidence = retrieve(passages, gap_question, top_k=5)
+                if use_local_model:
+                    with st.spinner("Llama is reading evidence on the CPU. Words will appear as it writes..."):
+                        gap_answer = st.write_stream(ollama_answer_stream(gap_question, gap_evidence))
+                    just_streamed_gap = True
+                else:
+                    gap_answer = extractive_answer(gap_question, gap_evidence)
                 st.session_state["gap_result"] = (gap_answer, gap_evidence)
             except Exception as exc:
                 st.error(str(exc))
         if "gap_result" in st.session_state:
             gap_answer, gap_evidence = st.session_state["gap_result"]
-            st.write(gap_answer)
+            if not just_streamed_gap:
+                st.write(gap_answer)
             for item in gap_evidence:
                 label = f"[{item['rank']}] {item['title']} ({item['year']}) — {item['location']}"
                 st.markdown(f"- [{label}]({item['url']})" if item["url"] else f"- {label}")

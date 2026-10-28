@@ -1,4 +1,17 @@
-# Research Gap Finder: Automated Literature Analysis Using RAG
+# Research Evidence Explorer V1
+
+The new review workspace is in [`research_app.py`](research_app.py). It saves search runs,
+screens papers, extracts source-stated research directions from included abstracts, and
+exports a reviewable report. Start it with:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run research_app.py --server.address 127.0.0.1
+```
+
+See [`docs/V1.md`](docs/V1.md) for the V1 workflow, validation, and scope. The syllabus
+demonstration remains below and can still be run with `app.py`.
+
+# Research Gap Finder: syllabus demonstration
 
 An Introduction to Text Analysis mini project. The system reads a focused set of research papers, retrieves relevant evidence for a question, and proposes **candidate** research gaps with links back to the source papers. A low frequency topic or missing keyword is a lead for review, not proof that a gap exists.
 
@@ -73,7 +86,7 @@ question → preprocess → TF-IDF/cosine ranking → top source passages
                                answer with numbered evidence
 ```
 
-`.\.venv\Scripts\python.exe -m rag_gap_finder.retrieve "What privacy concerns arise in AI education?"` gives a deterministic answer made from retrieved TextRank sentences. Add `--generator ollama` to ask the locally installed `llama3.2` transformer to synthesize those passages. This requires Ollama to be running. In the app, choose the answer method in tab 3. The generator sees at most five numbered passages and is instructed to cite them. **Always open the evidence and check its claims:** a language model can still misread or overstate an abstract.
+`.\.venv\Scripts\python.exe -m rag_gap_finder.retrieve "What privacy concerns arise in AI education?"` gives a deterministic answer made from retrieved TextRank sentences. Add `--generator ollama` to ask the locally installed `llama3.2` transformer to synthesize the evidence. This requires Ollama to be running. In the app, choose the answer method in tab 3. The generator sees query-focused sentences from at most five numbered passages; the app streams its answer as it writes. On a CPU, the first words can still take several seconds. **Always open the evidence and check its claims:** a language model can still misread or overstate an abstract.
 
 NER extracts candidate people, organizations, and places. NLTK's generic NER may mislabel domain terms such as “ChatGPT,” so these are aids to reading rather than trusted metadata.
 

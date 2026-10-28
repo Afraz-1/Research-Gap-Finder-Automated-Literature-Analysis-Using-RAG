@@ -93,34 +93,69 @@ def extractive_answer(question: str, evidence: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def ollama_answer(question: str, evidence: list[dict], model: str = "llama3.2") -> str:
-    """Ask a local transformer to synthesize only the retrieved evidence."""
+def focused_excerpt(question: str, text: str, max_sentences: int = 3, max_chars: int = 850) -> str:
+    """Keep complete source sentences most relevant to the question."""
+    sentences = [sentence.strip() for sentence in nltk.sent_tokenize(text) if sentence.strip()]
+    if not sentences:
+        return ""
+    try:
+        matrix = TfidfVectorizer(stop_words="english").fit_transform(sentences + [question])
+        scores = cosine_similarity(matrix[-1], matrix[:-1]).ravel()
+        ranked = sorted(range(len(sentences)), key=lambda index: (-scores[index], index))
+    except ValueError:
+        ranked = list(range(len(sentences)))
+    selected = []
+    size = 0
+    for index in ranked:
+        sentence = sentences[index]
+        if selected and size + len(sentence) > max_chars:
+            continue
+        selected.append(index)
+        size += len(sentence) + 1
+        if len(selected) >= max_sentences:
+            break
+    return " ".join(sentences[index] for index in sorted(selected))
+
+
+def ollama_answer_stream(question: str, evidence: list[dict], model: str = "llama3.2"):
+    """Yield a grounded local-model answer as Ollama produces it."""
     if not evidence:
-        return "No matching passage was found in this corpus."
+        yield "No matching passage was found in this corpus."
+        return
     sources = "\n\n".join(
         f"[{item['rank']}] {item['title']} ({item['year']}), {item['location']}: "
-        f"{item['raw_text'][:1400]}"
+        f"{focused_excerpt(question, item['raw_text'])}"
         for item in evidence[:5]
     )
     prompt = (
-        "You are helping a student review a SMALL set of paper abstracts. "
-        "Answer the question using ONLY the numbered sources below. "
-        "Cite every factual sentence with [number]. Distinguish what papers report "
-        "from your inference. If the abstracts do not support a claim, say so. "
-        "Do not call a candidate gap a proven research gap. Keep the answer under 180 words.\n\n"
+        "You are a research assistant. Answer the question directly in 2-4 sentences "
+        "using ONLY the numbered source excerpts below. End each factual sentence "
+        "with citations such as [1]. If the evidence is insufficient, say so. "
+        "Treat possible research gaps as hypotheses. Write at most 100 words.\n\n"
         f"Question: {question}\n\nSources:\n{sources}\n\nAnswer:"
     )
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}).encode()
+    payload = json.dumps({
+        "model": model, "prompt": prompt, "stream": True,
+        "options": {"temperature": 0, "num_predict": 220},
+    }).encode()
     request = urllib.request.Request(
         "http://localhost:11434/api/generate", data=payload,
         headers={"Content-Type": "application/json"}, method="POST"
     )
     try:
         with urllib.request.urlopen(request, timeout=180) as response:
-            answer = json.load(response)["response"].strip()
+            for line in response:
+                if line.strip():
+                    chunk = json.loads(line).get("response", "")
+                    if chunk:
+                        yield chunk
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("Local Ollama is unavailable. Start Ollama or use --generator extractive.") from exc
-    return answer
+
+
+def ollama_answer(question: str, evidence: list[dict], model: str = "llama3.2") -> str:
+    """Collect the streamed answer for command-line callers."""
+    return "".join(ollama_answer_stream(question, evidence, model)).strip()
 
 
 def main() -> None:
