@@ -1,121 +1,87 @@
-# Research Evidence Explorer V1
+﻿# Research Evidence Explorer
 
-The new review workspace is in [`research_app.py`](research_app.py). It saves search runs,
-screens papers, extracts source-stated research directions from included abstracts, and
-exports a reviewable report. Start it with:
+Research Evidence Explorer is a local workspace for turning a literature search into a reviewable set of research directions. It keeps the search record, paper screening decisions, source passages, and reviewer notes together so a proposed direction can be traced back to the evidence.
 
-```powershell
-.\.venv\Scripts\python.exe -m streamlit run research_app.py --server.address 127.0.0.1
+**Current release:** V1 supports article abstracts, one local reviewer, OpenAlex search or CSV import, and Markdown export. Candidate directions require human assessment. The app does not establish that a topic is novel or absent from the wider literature.
+
+## Why it exists
+
+Early literature reviews often end up spread across browser tabs, spreadsheets, and notes. That makes it hard to answer basic questions: Which query found a paper? Why was it included? Where did a proposed research direction come from? Research Evidence Explorer records those decisions and links each candidate to an exact sentence in an included abstract.
+
+## What V1 does
+
+- **Reproducible search record:** Save OpenAlex title-and-abstract queries, publication-year filters, run dates, result counts, and failures. Import a CSV when you already have a corpus.
+- **Paper screening:** Mark papers as included, excluded, or unsure. Exclusions require a reason. Repeated imports link to existing DOI records.
+- **Traceable directions:** Detect explicit limitation and future-work sentences in included abstracts and preserve their source and character offset.
+- **Evidence review:** Surface other included abstracts with related wording for inspection. A reviewer records a counterevidence check and a written assessment before accepting a direction.
+- **Export:** Download a Markdown report with the search history, screening totals, exclusions, accepted directions, source records, and reviewer notes.
+
+## Workflow
+
+```mermaid
+flowchart LR
+    A[Research question and criteria] --> B[OpenAlex search or CSV import]
+    B --> C[Saved search run and deduplicated papers]
+    C --> D[Human screening]
+    D --> E[Source-stated directions]
+    E --> F[Related-paper review]
+    F --> G[Reviewer decision]
+    G --> H[Markdown report]
 ```
 
-See [`docs/V1.md`](docs/V1.md) for the V1 workflow, validation, and scope. The syllabus
-demonstration remains below and can still be run with `app.py`.
+The search and screening record defines the scope of each report. A low number of matching abstracts is not evidence that a topic is unstudied.
 
-# Research Gap Finder: syllabus demonstration
+## Run locally
 
-An Introduction to Text Analysis mini project. The system reads a focused set of research papers, retrieves relevant evidence for a question, and proposes **candidate** research gaps with links back to the source papers. A low frequency topic or missing keyword is a lead for review, not proof that a gap exists.
-
-The included demonstration corpus contains 24 real AI-in-education article abstracts fetched from [OpenAlex](https://help.openalex.org/api/) on 3 October 2026. It has six papers in each of four title-curated groups: generative AI, learning analytics, intelligent tutoring, and ethics/policy. `data/ai_education_papers.csv` keeps the paper title, year, DOI/OpenAlex URL, abstract, and group label. It is a teaching sample, not a systematic review.
-
-## Four-day build plan
-
-| Day | Module | Course concepts | Demonstration |
-| --- | --- | --- | --- |
-| 1 | Corpus + preprocessing | PDF/abstract extraction, cleaning, tokenization, stopwords, lemmatization | Show raw text beside cleaned tokens and source location |
-| 2 | Represent and organize | BoW, TF-IDF, Word2Vec; Naive Bayes/SVM/Decision Tree on labeled papers; hierarchical/DBSCAN clustering; LDA/NMF topics | Compare words, predicted categories, clusters, and topics |
-| 3 | Retrieval + grounded answer | TF-IDF, cosine similarity, NER, TextRank and local transformer synthesis | Ask a question and inspect ranked source passages |
-| 4 | Candidate gaps + evaluation + demo | RAG, aspect coverage, simple aspect stance, citations, manual validation | Explain why each suggestion follows from retrieved evidence and where the evidence is weak |
-
-The classification component needs category labels. The included corpus uses title-curated groups; its scores are illustrative because the labels are selected by topical search and the held-out set contains only eight papers. Product-review sentiment is a course example rather than a natural fit for research papers; this project adapts it to **aspect-based stance** in abstract sentences. The keyword stance labels are exploratory, not validated sentiment judgments.
-
-## Module 1: build a traceable corpus
-
-Each record keeps its original wording for quotations and a separate cleaned version for text analysis. A CSV row is one abstract passage. A PDF is split by page, so a retrieved passage can cite its page number. Scanned PDFs need OCR before this module can read them.
-
-### Input choices
-
-Use a CSV with `title` and `abstract` columns, plus optional `authors`, `year`, `doi`, and `url`. Or put text-based PDFs in one directory. Keep all papers within one research area so comparisons are meaningful. A small initial target is 15–30 papers, ideally with titles, abstracts, and years; quality matters more than volume.
-
-### Run
+Use Python 3.10 or newer. From the repository root on Windows:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m nltk.downloader wordnet averaged_perceptron_tagger_eng punkt_tab maxent_ne_chunker_tab words
-.\.venv\Scripts\python.exe -m streamlit run app.py
+.\.venv\Scripts\python.exe -m pip install -r requirements-v1.txt
+.\.venv\Scripts\python.exe -m streamlit run research_app.py --server.address 127.0.0.1
 ```
 
-Use the project `.venv` interpreter for every command. This keeps the project packages separate from Anaconda, TensorFlow, and other projects. The app builds its analysis from the included CSV automatically. The NLTK download is only needed once. You can replace the corpus path with your own CSV or a directory of PDFs. The app also accepts one CSV or multiple PDFs through its sidebar. The preprocessing output is JSON Lines: one line per passage with paper metadata, source location, raw text, normalized text, and tokens. `data/sample_papers.csv` is synthetic and intended only for testing.
+Open the local URL printed by Streamlit. V1 has no account system, so keep it bound to `127.0.0.1`.
 
-To run the modules individually:
+The app stores review data in `data/research_evidence.sqlite3`, which Git ignores. Set `REE_DB_PATH` to use another database path. Set `OPENALEX_API_KEY` if your OpenAlex access requires a key; the app does not write it into search history.
+
+### Try the offline sample
+
+1. Create a project with a focused research question and inclusion/exclusion criteria.
+2. Click **Import bundled AI-in-education sample** in the Search tab.
+3. Screen relevant papers in **Screen papers**.
+4. Click **Find directions in included papers** in **Investigate directions**.
+5. Inspect the source sentence and related abstracts, record your assessment, then export the report.
+
+The bundled 24-abstract sample is a demonstration corpus selected by topic. It is not a comprehensive search.
+
+### Import your own data
+
+Provide a UTF-8 CSV with `title` and `abstract` columns. Optional columns include `authors`, `year`, `doi`, and `url`. For live discovery, enter an OpenAlex query and year range in the Search tab. V1 searches article titles and abstracts and caps each run at 500 returned records.
+
+## Project structure
+
+| Path | Purpose |
+| --- | --- |
+| `research_app.py` | Streamlit review interface and report export |
+| `rag_gap_finder/discovery.py` | OpenAlex search and CSV parsing |
+| `rag_gap_finder/workspace.py` | SQLite schema, search records, screening, and review decisions |
+| `rag_gap_finder/evidence.py` | Source sentence detection and related-paper retrieval |
+| `tests/test_workspace_v1.py` | V1 workflow and search tests |
+| `data/ai_education_papers.csv` | Offline sample abstracts |
+
+The earlier text-analysis exploration remains available in `app.py` and [its archived guide](docs/legacy-course-demo.md). The V1 workflow runs through `research_app.py`.
+
+## Verify
 
 ```powershell
-.\.venv\Scripts\python.exe -m rag_gap_finder.preprocess --input data/ai_education_papers.csv --output data/processed/ai_education_passages.jsonl
-.\.venv\Scripts\python.exe -m rag_gap_finder.analyze
-.\.venv\Scripts\python.exe -m rag_gap_finder.gaps
+.\.venv\Scripts\python.exe -m pytest -q tests/test_workspace_v1.py
 ```
 
-To refresh the real corpus, run `.\.venv\Scripts\python.exe -m rag_gap_finder.fetch_papers` before preprocessing. [OpenAlex authentication guidance](https://help.openalex.org/api/authentication/) says basic queries can work without a key; if needed, set the `OPENALEX_API_KEY` environment variable first. Refreshing changes the paper sample and therefore the model outputs.
+The V1 tests cover search pagination with a mocked API response, CSV validation, persistent screening and review decisions, DOI deduplication, exact source offsets, and the acceptance gate. The complete repository test suite also covers the earlier text-analysis code.
 
-### What to say in the viva
+## Current limits and next steps
 
-1. **Cleaning** removes URLs, citation markers, and punctuation that usually do not help word matching.
-2. **Tokenization** turns text into a list of words.
-3. **Stopword removal** removes common words such as “the” while keeping content words.
-4. **Lemmatization** reduces grammatical forms: “studies” → “study”, “using” → “use”.
-5. We retain raw text because citations and readable answers must show the paper's original wording. Preprocessing changes a representation; it does not rewrite the source.
+V1 works from abstracts. It can miss relevant papers and may extract a sentence that does not represent a useful research gap. Related-paper similarity provides reading leads; it does not determine whether a paper supports or contradicts a claim. A reviewer must inspect the wider literature before treating a direction as novel.
 
-The tokenizer is English-oriented. PDF reading order can be imperfect, especially in two-column papers. We will inspect a few outputs before using them as evidence.
-
-## Module 2: representations and models
-
-- **Bag of Words** counts each token per paper. It ignores order and meaning, but gives a transparent frequency baseline.
-- **TF-IDF** raises the weight of a word when it is common in one paper and rarer across the collection. Its vectors also power retrieval.
-- **Word2Vec** learns which words appear in similar contexts. This corpus is too small for stable semantic claims; the neighbor list is a demonstration.
-- **Classification** predicts one of four supplied topic labels. Naive Bayes uses word probabilities, linear SVM finds a separating boundary, and a decision tree splits by features. The code fits TF-IDF inside each training pipeline to avoid test leakage. Compare macro F1 as well as accuracy; treat the eight-paper test as illustrative.
-- **Clustering** groups papers without labels. Hierarchical clustering always assigns a group; DBSCAN can mark papers as noise when its density threshold finds no close neighbors. These groups need not equal the supplied labels.
-- **Topic modeling** uses LDA on counts and NMF on TF-IDF. The displayed top words help a person interpret topics; topic numbers have no inherent meaning.
-
-## Module 3: retrieval augmented generation
-
-```text
-question → preprocess → TF-IDF/cosine ranking → top source passages
-                                              ↓
-                              TextRank + NER + answer generator
-                                              ↓
-                               answer with numbered evidence
-```
-
-`.\.venv\Scripts\python.exe -m rag_gap_finder.retrieve "What privacy concerns arise in AI education?"` gives a deterministic answer made from retrieved TextRank sentences. Add `--generator ollama` to ask the locally installed `llama3.2` transformer to synthesize the evidence. This requires Ollama to be running. In the app, choose the answer method in tab 3. The generator sees query-focused sentences from at most five numbered passages; the app streams its answer as it writes. On a CPU, the first words can still take several seconds. **Always open the evidence and check its claims:** a language model can still misread or overstate an abstract.
-
-NER extracts candidate people, organizations, and places. NLTK's generic NER may mislabel domain terms such as “ChatGPT,” so these are aids to reading rather than trusted metadata.
-
-## Module 4: gap hypotheses
-
-The project looks for mentions of five aspects: learning outcomes, privacy/fairness, teacher role, long-term evaluation, and accessibility/equity. For each topical group, it counts how many abstracts mention each aspect, extracts explicit limitation sentences, and labels the tone of one matching sentence with a simple positive/negative word heuristic. Low counts become **questions to check**, not declarations that research does not exist. In tab 4, choose a hypothesis and retrieve relevant papers; the optional local model can synthesize those passages with citations. A proper claim requires a broader search, full-text reading, and checking newer work.
-
-For example, if zero of six learning-analytics abstracts mention privacy, you can say: “Privacy was absent from the six selected abstracts, so I would investigate privacy in a larger learning-analytics corpus.” You cannot say: “Nobody has researched privacy in learning analytics.”
-
-## What each course experiment contributes
-
-| Experiment | Where to show it |
-| --- | --- |
-| 1. Preprocessing | App tab 1: original text beside cleaned tokens |
-| 2. BoW, TF-IDF, Word2Vec | Tab 2: term weights and word neighbors |
-| 3. Naive Bayes, SVM, Decision Tree | Tab 2: held-out predictions and metrics |
-| 4. Hierarchical and DBSCAN | Tab 2: cluster IDs and DBSCAN noise |
-| 5. LDA and NMF | Tab 2: top words per topic |
-| 6. TF-IDF, cosine, NER | Tab 3: ranked passages, scores, and entities |
-| 7. Aspect-based sentiment | Tab 4: aspect sentence stance; explain why it is only a heuristic for papers |
-| 8. TextRank and transformers | Tab 3: extractive summary and optional local Llama synthesis |
-
-## Four-day study and presentation schedule
-
-1. **Day 1:** Run preprocessing. Explain every transformation using one before/after abstract.
-2. **Day 2:** Explore tab 2. Practice explaining why TF-IDF differs from BoW and why supervised labels differ from clusters/topics.
-3. **Day 3:** Ask three questions in tab 3. Trace scores, passages, TextRank summaries, entities, and citations. Test the local Llama option if available.
-4. **Day 4:** Review tab 4. Pick two candidate gaps, inspect their linked abstracts, and prepare to explain the limits of keyword counts and a small sample.
-
-Run `.\.venv\Scripts\python.exe -m pytest -q` for the small verification suite. Do not present the 24-abstract sample or model scores as a comprehensive literature review.
-
-The next module will fit BoW/TF-IDF and Word2Vec **only on the chosen corpus**, then add visual comparisons and models. The retrieval module will rank passages with cosine similarity. The final module will generate a cautious, cited synthesis from those results and make it easy to review the suggested gaps.
+Next steps are full-text passage extraction, stronger paper identity and version handling, a labeled evaluation set for retrieval and citation support, multi-reviewer decisions, and versioned report snapshots. These will be added only after the V1 review workflow is evaluated with real users.
